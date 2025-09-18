@@ -1,0 +1,16 @@
+{
+    "mcpServers": {
+      "mssql-sql-auth": {
+        "command": "node",
+        "args": ["/path/to/your/MssqlMcp/Node/dist/index.js"],
+        "env": {
+          "SERVER_NAME": "integ.db.skyslope.com",
+          "DATABASE_NAME": "Integ_SkySlope_Prime",
+          "SQL_USER": "${env:MSSQL_USER}",
+          "SQL_PASSWORD": "${env:MSSQL_PASSWORD}",
+          "READONLY": "true",
+          "TRUST_SERVER_CERTIFICATE": "true"
+        }
+      }
+    }
+  }

@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "mssql-sql-auth": {
+      "command": "node",
+      "args": ["/Users/apepper/Documents/SQL-AI-samples/MssqlMcp/Node/dist/index.js"],
+      "env": {
+        "SERVER_NAME": "your-server-name",
+        "DATABASE_NAME": "your-database-name",
+        "SQL_USER": "your-username",
+        "SQL_PASSWORD": "your-password",
+        "READONLY": "false",
+        "TRUST_SERVER_CERTIFICATE": "true"
+      }
+    }
+  }
+}
