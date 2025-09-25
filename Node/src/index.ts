@@ -92,6 +92,9 @@ export async function createSqlConfig(): Promise<{ config: sql.config }> {
   return { config };
 }
 
+// Read READONLY env variable
+const isReadOnly = process.env.READONLY === "true";
+
 // Create tool instances and set prefixed names
 const updateDataTool = new UpdateDataTool();
 updateDataTool.name = createToolName("update_data");
@@ -101,6 +104,7 @@ insertDataTool.name = createToolName("insert_data");
 
 const readDataTool = new ReadDataTool();
 readDataTool.name = createToolName("read_data");
+readDataTool.isReadOnly = isReadOnly;
 
 const createTableTool = new CreateTableTool();
 createTableTool.name = createToolName("create_table");
@@ -110,15 +114,18 @@ createIndexTool.name = createToolName("create_index");
 
 const listTableTool = new ListTableTool();
 listTableTool.name = createToolName("list_table");
+listTableTool.isReadOnly = isReadOnly;
 
 const dropTableTool = new DropTableTool();
 dropTableTool.name = createToolName("drop_table");
 
 const describeTableTool = new DescribeTableTool();
 describeTableTool.name = createToolName("describe_table");
+describeTableTool.isReadOnly = isReadOnly;
 
 const describeIndexTool = new DescribeIndexTool();
 describeIndexTool.name = createToolName("describe_index");
+describeIndexTool.isReadOnly = isReadOnly;
 
 const server = new Server(
   {
@@ -131,9 +138,6 @@ const server = new Server(
     },
   },
 );
-
-// Read READONLY env variable
-const isReadOnly = process.env.READONLY === "true";
 
 // Request handlers
 

@@ -6,6 +6,7 @@ export class DescribeTableTool implements Tool {
   [key: string]: any;
   name = "describe_table";
   description = "Describes the schema (columns and types) of a specified MSSQL Database table.";
+  isReadOnly = false;
   inputSchema = {
     type: "object",
     properties: {
@@ -18,7 +19,13 @@ export class DescribeTableTool implements Tool {
     try {
       const { tableName } = params;
       const request = new sql.Request();
-      const query = `SELECT COLUMN_NAME as name, DATA_TYPE as type FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @tableName`;
+      let query = `SELECT COLUMN_NAME as name, DATA_TYPE as type FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @tableName`;
+
+      // Add NOLOCK hint if in read-only mode
+      if (this.isReadOnly) {
+        query = query.replace(/FROM INFORMATION_SCHEMA\.COLUMNS/, 'FROM INFORMATION_SCHEMA.COLUMNS WITH (NOLOCK)');
+      }
+
       request.input("tableName", sql.NVarChar, tableName);
       const result = await request.query(query);
       return {

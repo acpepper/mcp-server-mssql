@@ -155,6 +155,7 @@ You can configure the connection using either a single `DATABASE_URL` or individ
 - **CONNECTION_TIMEOUT**: (Optional) Connection timeout in seconds. Defaults to `30` if not set.
 - **TRUST_SERVER_CERTIFICATE**: (Optional) Set to `"true"` to trust self-signed server certificates (useful for development or when connecting to servers with self-signed certs). Defaults to `"false"`.
 - **TOOL_PREFIX**: (Optional) Add a prefix to all tool names. For example, setting `TOOL_PREFIX=mssql` will rename tools from `read_data` to `mssql_read_data`. Useful when running multiple MCP servers to avoid naming conflicts.
+- **NOLOCK Optimization**: When `READONLY=true`, all SELECT queries automatically include `WITH (NOLOCK)` hints to improve performance by avoiding shared locks. This is safe for read-only operations and can significantly improve query performance in busy databases.
 
 ## Sample Configurations
 
@@ -180,5 +181,6 @@ Once configured, you can interact with your database using natural language:
 - The server requires a WHERE clause for read operations to prevent accidental full table scans
 - Update operations require explicit WHERE clauses for security
 - Set `READONLY: "true"` in production environments if you only need read access
+- When `READONLY=true`, queries use `WITH (NOLOCK)` hints for better performance. This is safe for read-only operations but means queries may read uncommitted data
 
 You should now have successfully configured the MCP server for MSSQL Database with your preferred AI assistant. This setup allows you to seamlessly interact with MSSQL Database through natural language queries!

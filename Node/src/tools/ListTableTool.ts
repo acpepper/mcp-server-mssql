@@ -5,11 +5,12 @@ export class ListTableTool implements Tool {
   [key: string]: any;
   name = "list_table";
   description = "Lists tables in an MSSQL Database, or list tables in specific schemas";
+  isReadOnly = false;
   inputSchema = {
     type: "object",
     properties: {
-      parameters: { 
-        type: "array", 
+      parameters: {
+        type: "array",
         description: "Schemas to filter by (optional)",
         items: {
           type: "string"
@@ -25,7 +26,13 @@ export class ListTableTool implements Tool {
       const { parameters } = params;
       const request = new sql.Request();
       const schemaFilter = parameters && parameters.length > 0 ? `AND TABLE_SCHEMA IN (${parameters.map((p: string) => `'${p}'`).join(", ")})` : "";
-      const query = `SELECT TABLE_SCHEMA + '.' + TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ${schemaFilter} ORDER BY TABLE_SCHEMA, TABLE_NAME`;
+      let query = `SELECT TABLE_SCHEMA + '.' + TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ${schemaFilter} ORDER BY TABLE_SCHEMA, TABLE_NAME`;
+
+      // Add NOLOCK hint if in read-only mode
+      if (this.isReadOnly) {
+        query = query.replace(/FROM INFORMATION_SCHEMA\.TABLES/, 'FROM INFORMATION_SCHEMA.TABLES WITH (NOLOCK)');
+      }
+
       const result = await request.query(query);
       return {
         success: true,

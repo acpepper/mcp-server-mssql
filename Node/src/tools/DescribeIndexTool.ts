@@ -5,6 +5,7 @@ export class DescribeIndexTool implements Tool {
   [key: string]: any;
   name = "describe_index";
   description = "Describes the indexes (including primary keys, unique constraints, and regular indexes) for a specified MSSQL Database table.";
+  isReadOnly = false;
   inputSchema = {
     type: "object",
     properties: {
@@ -27,7 +28,7 @@ export class DescribeIndexTool implements Tool {
       const request = new sql.Request();
 
       // Query to get comprehensive index information
-      const query = `
+      let query = `
         SELECT
           i.name AS index_name,
           i.type_desc AS index_type,
@@ -53,6 +54,16 @@ export class DescribeIndexTool implements Tool {
           AND i.index_id > 0  -- Exclude heap (index_id = 0)
         ORDER BY i.name, ic.key_ordinal, ic.is_included_column DESC
       `;
+
+      // Add NOLOCK hints if in read-only mode
+      if (this.isReadOnly) {
+        query = query.replace(/FROM sys\.indexes i/g, 'FROM sys.indexes i WITH (NOLOCK)');
+        query = query.replace(/INNER JOIN sys\.index_columns ic/g, 'INNER JOIN sys.index_columns ic WITH (NOLOCK)');
+        query = query.replace(/INNER JOIN sys\.columns c/g, 'INNER JOIN sys.columns c WITH (NOLOCK)');
+        query = query.replace(/INNER JOIN sys\.tables t/g, 'INNER JOIN sys.tables t WITH (NOLOCK)');
+        query = query.replace(/INNER JOIN sys\.schemas s/g, 'INNER JOIN sys.schemas s WITH (NOLOCK)');
+        query = query.replace(/LEFT JOIN sys\.data_spaces ds/g, 'LEFT JOIN sys.data_spaces ds WITH (NOLOCK)');
+      }
 
       request.input("schemaName", sql.NVarChar, schemaName);
       request.input("tableName", sql.NVarChar, tableName);
