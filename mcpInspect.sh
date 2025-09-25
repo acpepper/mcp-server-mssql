@@ -6,10 +6,6 @@ if ! command -v node &> /dev/null; then
     exit 1
 fi
 
-# cd to the Node directory
-echo "Changing to Node directory..."
-cd ./Node
-
 # rebuild the Node.js server
 echo "Rebuilding Node.js server..."
 npm run build
