@@ -18,7 +18,9 @@ const TOOL_PREFIX = process.env.TOOL_PREFIX || "";
 
 // Utility function to create prefixed tool name
 export function createToolName(baseName: string): string {
-  return TOOL_PREFIX ? `${TOOL_PREFIX}_${baseName}` : baseName;
+  const prefixedName = TOOL_PREFIX ? `${TOOL_PREFIX}_${baseName}` : baseName;
+  // Note: Cannot use console.log in MCP servers as it interferes with STDIO protocol
+  return prefixedName;
 }
 
 // Internal imports
@@ -38,6 +40,9 @@ import { DescribeIndexTool } from "./tools/DescribeIndexTool.js";
 
 // Globals for connection reuse
 let globalSqlPool: sql.ConnectionPool | null = null;
+let connectionRetryCount = 0;
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_BASE = 1000; // 1 second base delay
 
 // Function to create SQL config with SQL Server authentication
 export async function createSqlConfig(): Promise<{ config: sql.config }> {
@@ -73,21 +78,19 @@ export async function createSqlConfig(): Promise<{ config: sql.config }> {
     password: password,
     options: {
       encrypt: true,
-      trustServerCertificate
+      trustServerCertificate,
+      enableArithAbort: true,
+      useUTC: false,
+      requestTimeout: 30000, // 30 seconds for individual requests
     },
     connectionTimeout: connectionTimeout * 1000, // convert seconds to milliseconds
+    pool: {
+      max: 10,
+      min: 0,
+      idleTimeoutMillis: 30000,
+      acquireTimeoutMillis: 30000,
+    },
   };
-
-  // Add ApplicationIntent=ReadOnly when READONLY environment variable is set
-  if (isReadOnly) {
-    config.options = {
-      ...config.options,
-      useUTC: false,
-      enableArithAbort: true
-    };
-    // Add ApplicationIntent to connection string via server property
-    config.server = `${server};ApplicationIntent=ReadOnly`;
-  }
 
   return { config };
 }
@@ -141,14 +144,17 @@ const server = new Server(
 
 // Request handlers
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: isReadOnly
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  const tools = isReadOnly
     ? [listTableTool, readDataTool, describeTableTool, describeIndexTool] // todo: add searchDataTool to the list of tools available in readonly mode once implemented
-    : [insertDataTool, readDataTool, describeTableTool, describeIndexTool, updateDataTool, createTableTool, createIndexTool, dropTableTool, listTableTool], // add all new tools here
-}));
+    : [insertDataTool, readDataTool, describeTableTool, describeIndexTool, updateDataTool, createTableTool, createIndexTool, dropTableTool, listTableTool]; // add all new tools here
+
+  return { tools };
+});
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+
   try {
     let result;
     switch (name) {
@@ -197,16 +203,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           isError: true,
         };
     }
+
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
     };
+
   } catch (error) {
+    // Note: Cannot use console.error in MCP servers as it interferes with STDIO protocol
+
+    // Provide more detailed error information
+    let errorMessage = `Error occurred in tool ${name}: ${error}`;
+    const errorStr = String(error);
+
+    // Add specific error context
+    if (errorStr.includes('connection')) {
+      errorMessage += '\n\nThis appears to be a database connection issue. Please check:';
+      errorMessage += '\n- Database server is running and accessible';
+      errorMessage += '\n- Network connectivity to the database';
+      errorMessage += '\n- Credentials are correct';
+      errorMessage += '\n- Database name exists';
+    } else if (errorStr.includes('timeout')) {
+      errorMessage += '\n\nThis appears to be a timeout issue. The operation took too long to complete.';
+    } else if (errorStr.includes('permission') || errorStr.includes('denied')) {
+      errorMessage += '\n\nThis appears to be a permission issue. Please check database user permissions.';
+    }
+
     return {
-      content: [{ type: "text", text: `Error occurred: ${error}` }],
+      content: [{ type: "text", text: errorMessage }],
       isError: true,
     };
   }
 });
+
+// Graceful shutdown handler
+async function gracefulShutdown() {
+  if (globalSqlPool) {
+    try {
+      await globalSqlPool.close();
+    } catch (error) {
+      // Silently handle shutdown errors
+    }
+  }
+
+  process.exit(0);
+}
+
+// Handle process termination signals
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGUSR2', gracefulShutdown); // For nodemon restart
 
 // Server startup
 async function runServer() {
@@ -214,41 +259,97 @@ async function runServer() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
   } catch (error) {
-    console.error("Fatal error running server:", error);
     process.exit(1);
   }
 }
 
 runServer().catch((error) => {
-  console.error("Fatal error running server:", error);
   process.exit(1);
 });
 
-// Connect to SQL only when handling a request
+// Health check function to verify connection is working
+async function isConnectionHealthy(): Promise<boolean> {
+  try {
+    if (!globalSqlPool || !globalSqlPool.connected) {
+      return false;
+    }
 
-async function ensureSqlConnection() {
-  // If we have a pool and it's connected, reuse it
-  if (globalSqlPool && globalSqlPool.connected) {
+    // Test the connection with a simple query
+    const result = await globalSqlPool.request().query('SELECT 1 as test');
+    return result.recordset && result.recordset.length > 0;
+  } catch (error) {
+    // Connection health check failed - return false silently
+    return false;
+  }
+}
+
+// Enhanced connection function with retry logic and health checks
+async function ensureSqlConnection(): Promise<void> {
+  // If we have a healthy connection, reuse it
+  if (await isConnectionHealthy()) {
+    connectionRetryCount = 0; // Reset retry count on successful connection
     return;
   }
 
-  // Otherwise, create a new connection
-  const { config } = await createSqlConfig();
-
-  // Close old pool if exists
-  if (globalSqlPool && globalSqlPool.connected) {
-    await globalSqlPool.close();
+  // Close old pool if it exists
+  if (globalSqlPool) {
+    try {
+      await globalSqlPool.close();
+    } catch (error) {
+      // Silently handle pool closure errors
+    }
+    globalSqlPool = null;
   }
 
-  globalSqlPool = await sql.connect(config);
+  // Attempt connection with retry logic
+  for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+    try {
+      const { config } = await createSqlConfig();
+      globalSqlPool = await sql.connect(config);
+
+      // Verify the connection is actually working
+      if (await isConnectionHealthy()) {
+        connectionRetryCount = 0;
+        return;
+      } else {
+        throw new Error('Connection established but health check failed');
+      }
+
+    } catch (error) {
+      if (attempt === MAX_RETRY_ATTEMPTS) {
+        connectionRetryCount = attempt;
+        throw new Error(`Failed to establish SQL connection after ${MAX_RETRY_ATTEMPTS} attempts. Last error: ${error}`);
+      }
+
+      // Exponential backoff delay
+      const delay = RETRY_DELAY_BASE * Math.pow(2, attempt - 1);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
 }
 
-// Patch all tool handlers to ensure SQL connection before running
+// Patch all tool handlers to ensure SQL connection before running with enhanced error handling
 function wrapToolRun(tool: { run: (...args: any[]) => Promise<any> }) {
   const originalRun = tool.run.bind(tool);
   tool.run = async function (...args: any[]) {
-    await ensureSqlConnection();
-    return originalRun(...args);
+    try {
+      await ensureSqlConnection();
+      return await originalRun(...args);
+    } catch (error) {
+      // If it's a connection error, try to reconnect once more
+      const errorStr = String(error);
+      if (errorStr.includes('connection')) {
+        try {
+          globalSqlPool = null; // Force reconnection
+          await ensureSqlConnection();
+          return await originalRun(...args);
+        } catch (retryError) {
+          throw new Error(`Database connection failed: ${retryError}`);
+        }
+      }
+
+      throw error;
+    }
   };
 }
 
