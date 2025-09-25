@@ -68,7 +68,8 @@ This server leverages the Model Context Protocol (MCP), a versatile framework th
           "args": ["q:\\Repos\\SQL-AI-samples\\MssqlMcp\\Node\\dist\\index.js"],
           "env": {
             "DATABASE_URL": "mssql://username:password@your-server:1433/your-database",
-            "READONLY": "false"
+            "READONLY": "false",
+            "TOOL_PREFIX": "mssql"
           }
         }
       }
@@ -90,7 +91,8 @@ This server leverages the Model Context Protocol (MCP), a versatile framework th
                 "args": ["C:/path/to/your/Node/dist/index.js"],
                 "env": {
                   "DATABASE_URL": "mssql://username:password@your-server:1433/your-database",
-                  "READONLY": "false"
+                  "READONLY": "false",
+                  "TOOL_PREFIX": "mssql"
                 }
             }
         }
@@ -123,7 +125,8 @@ This server leverages the Model Context Protocol (MCP), a versatile framework th
          "args": ["C:/path/to/your/Node/dist/index.js"],
          "env": {
            "DATABASE_URL": "mssql://username:password@your-server:1433/your-database",
-           "READONLY": "false"
+           "READONLY": "false",
+           "TOOL_PREFIX": "mssql"
          }
        }
      }
@@ -151,6 +154,7 @@ You can configure the connection using either a single `DATABASE_URL` or individ
 - **Path**: Update the path in `args` to point to your actual project location.
 - **CONNECTION_TIMEOUT**: (Optional) Connection timeout in seconds. Defaults to `30` if not set.
 - **TRUST_SERVER_CERTIFICATE**: (Optional) Set to `"true"` to trust self-signed server certificates (useful for development or when connecting to servers with self-signed certs). Defaults to `"false"`.
+- **TOOL_PREFIX**: (Optional) Add a prefix to all tool names. For example, setting `TOOL_PREFIX=mssql` will rename tools from `read_data` to `mssql_read_data`. Useful when running multiple MCP servers to avoid naming conflicts.
 
 ## Sample Configurations
 

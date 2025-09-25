@@ -10,6 +10,17 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
+// Load environment variables
+dotenv.config();
+
+// Get tool prefix from environment variable
+const TOOL_PREFIX = process.env.TOOL_PREFIX || "";
+
+// Utility function to create prefixed tool name
+export function createToolName(baseName: string): string {
+  return TOOL_PREFIX ? `${TOOL_PREFIX}_${baseName}` : baseName;
+}
+
 // Internal imports
 import { UpdateDataTool } from "./tools/UpdateDataTool.js";
 import { InsertDataTool } from "./tools/InsertDataTool.js";
@@ -81,15 +92,33 @@ export async function createSqlConfig(): Promise<{ config: sql.config }> {
   return { config };
 }
 
+// Create tool instances and set prefixed names
 const updateDataTool = new UpdateDataTool();
+updateDataTool.name = createToolName("update_data");
+
 const insertDataTool = new InsertDataTool();
+insertDataTool.name = createToolName("insert_data");
+
 const readDataTool = new ReadDataTool();
+readDataTool.name = createToolName("read_data");
+
 const createTableTool = new CreateTableTool();
+createTableTool.name = createToolName("create_table");
+
 const createIndexTool = new CreateIndexTool();
+createIndexTool.name = createToolName("create_index");
+
 const listTableTool = new ListTableTool();
+listTableTool.name = createToolName("list_table");
+
 const dropTableTool = new DropTableTool();
+dropTableTool.name = createToolName("drop_table");
+
 const describeTableTool = new DescribeTableTool();
+describeTableTool.name = createToolName("describe_table");
+
 const describeIndexTool = new DescribeIndexTool();
+describeIndexTool.name = createToolName("describe_index");
 
 const server = new Server(
   {
@@ -143,7 +172,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case describeTableTool.name:
         if (!args || typeof args.tableName !== "string") {
           return {
-            content: [{ type: "text", text: `Missing or invalid 'tableName' argument for describe_table tool.` }],
+            content: [{ type: "text", text: `Missing or invalid 'tableName' argument for ${describeTableTool.name} tool.` }],
             isError: true,
           };
         }
@@ -152,7 +181,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case describeIndexTool.name:
         if (!args || typeof args.tableName !== "string") {
           return {
-            content: [{ type: "text", text: `Missing or invalid 'tableName' argument for describe_index tool.` }],
+            content: [{ type: "text", text: `Missing or invalid 'tableName' argument for ${describeIndexTool.name} tool.` }],
             isError: true,
           };
         }
