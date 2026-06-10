@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server for Microsoft SQL Server databases, providing secure database operations through a standardized interface.
 
-> **Note**: This project was created from the [Azure SQL AI Samples repository](https://github.com/Azure-Samples/SQL-AI-samples), specifically the [MssqlMcp](https://github.com/Azure-Samples/SQL-AI-samples/tree/main/MssqlMcp) implementation.
+> **Note**: This project was created from the [Azure SQL AI Samples repository](https://github.com/Azure-Samples/SQL-AI-samples), specifically the `MssqlMcp/Node` implementation. The upstream sample was removed from that repository in June 2026 ([PR #96](https://github.com/Azure-Samples/SQL-AI-samples/pull/96), "Removed unsafe MCP sample"); this fork includes all upstream changes through the final version (Nov 2025), including the `SELECT ... INTO` security fix.
 
 ## Features
 
